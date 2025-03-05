@@ -59,6 +59,3 @@ Security Check Results:
 ## License
 This project is open-source and available for use and modification under the MIT License.
 
-## Author
-Developed by [Your Name]. Feel free to contribute and suggest improvements!
-
