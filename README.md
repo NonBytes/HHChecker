@@ -6,10 +6,6 @@ HHChecker is a comprehensive cybersecurity assessment toolkit designed to help s
 
 - **CORS Configuration Checker**: Identify misconfigurations in Cross-Origin Resource Sharing (CORS) implementations that could lead to security vulnerabilities
 - **HTTP Header Security Checker**: Analyze HTTP security headers to ensure proper security controls are in place
-- **Detailed Reporting**: Comprehensive reports with security findings and remediation recommendations
-- **Customization Options**: Tailor security checks to specific requirements through various configuration options
-- **Multi-threading Support**: Perform checks in parallel for improved performance
-- **Color-coded Output**: Easy-to-understand visual feedback with color-coded terminal output
 
 ## Installation
 
