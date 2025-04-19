@@ -31,11 +31,6 @@ HHChecker is a comprehensive cybersecurity assessment toolkit designed to help s
    pip install -e .
    ```
 
-Alternatively, you can install directly from PyPI:
-```
-pip install hhchecker
-```
-
 ## Usage
 
 ### CORS Configuration Checker
