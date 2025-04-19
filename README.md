@@ -1,175 +1,113 @@
-# HTTP Header Security Checker
+# HHChecker: Cybersecurity Assessment Toolkit
 
-A comprehensive Python tool for analyzing and validating security headers in HTTP responses. This tool helps security professionals and developers identify missing or misconfigured security headers that could leave web applications vulnerable to attacks.
-
-![Security Headers Check](https://img.shields.io/badge/Security-Headers%20Check-brightgreen)
-![Python](https://img.shields.io/badge/python-3.6+-blue.svg)
-![License](https://img.shields.io/badge/license-MIT-green.svg)
+HHChecker is a comprehensive cybersecurity assessment toolkit designed to help security professionals identify and remediate web application security vulnerabilities. The toolkit provides specialized tools for assessing CORS configurations, HTTP headers, and other security mechanisms.
 
 ## Features
 
-- 🔍 Checks for essential security headers (HSTS, CSP, X-Frame-Options, etc.)
-- 🔒 Validates proper configuration of existing headers
-- 🍪 Analyzes cookie security attributes
-- 🌐 Tests CORS implementations
-- 📊 Color-coded output for easy analysis
-- ⚙️ Customizable checks with profiles and header selection
-- 🧩 Extensive error handling and input validation
+- **CORS Configuration Checker**: Identify misconfigurations in Cross-Origin Resource Sharing (CORS) implementations that could lead to security vulnerabilities
+- **HTTP Header Security Checker**: Analyze HTTP security headers to ensure proper security controls are in place
+- **Detailed Reporting**: Comprehensive reports with security findings and remediation recommendations
+- **Customization Options**: Tailor security checks to specific requirements through various configuration options
+- **Multi-threading Support**: Perform checks in parallel for improved performance
+- **Color-coded Output**: Easy-to-understand visual feedback with color-coded terminal output
 
 ## Installation
 
-```bash
-# Clone the repository
-git clone https://github.com/NonBytes/HHChecker.git
-cd HHChecker
+### Prerequisites
 
-# Install required packages
-pip install requests colorama
+- Python 3.7 or higher
+- pip (Python package installer)
+
+### Installation Steps
+
+1. Clone the repository:
+   ```
+   git clone https://github.com/yourusername/hhchecker.git
+   cd hhchecker
+   ```
+
+2. Install the package and dependencies:
+   ```
+   pip install -e .
+   ```
+
+Alternatively, you can install directly from PyPI:
+```
+pip install hhchecker
 ```
 
 ## Usage
 
-### Basic Usage
+### CORS Configuration Checker
+
+The CORS Configuration Checker tool tests CORS configurations and identifies potential security issues:
 
 ```bash
-python hhchecker.py <url>
+# Basic usage
+hhchecker cors-check https://example.com
+
+# With custom origins
+hhchecker cors-check https://example.com --origins "https://evil.com,https://attacker.com"
+
+# With multi-threading for faster scanning
+hhchecker cors-check https://example.com --workers 5
 ```
 
-### Command Line Arguments
+For Python usage:
 
-```
-usage: hhchecker.py [-h] [-c COOKIES] [-o ORIGIN] [-t TIMEOUT] [--no-verify]
-                                      [-H HEADERS] [-l] [-p {simple,cookies,cors,all,all_without_additional}]
-                                      [--skip-additional] [url]
+```python
+from hhchecker.cors_checker import CORSChecker
 
-HTTP Header Security Checker
+# Initialize the checker
+checker = CORSChecker(
+    url="https://example.com",
+    custom_origins=["https://evil.com", "https://attacker.com"],
+    verbose=True,
+    max_workers=3
+)
 
-positional arguments:
-  url                   URL to check (if not specified, will prompt for input)
-
-options:
-  -h, --help            show this help message and exit
-  -c COOKIES, --cookies COOKIES
-                        Cookies to include in the request (format: name1=value1; name2=value2)
-  -o ORIGIN, --origin ORIGIN
-                        Expected CORS origin value for testing
-  -t TIMEOUT, --timeout TIMEOUT
-                        Request timeout in seconds (default: 10)
-  --no-verify           Disable SSL certificate verification
-  -H HEADERS, --header HEADERS
-                        Specific header(s) to check (can be used multiple times)
-  -l, --list-headers    List all available security headers that can be checked
-  -p {simple,cookies,cors,all,all_without_additional}, --profile {simple,cookies,cors,all,all_without_additional}
-                        Use a predefined check profile
-  --skip-additional     Skip additional security checks beyond the main headers
+# Run all tests
+results = checker.run_all_tests()
 ```
 
-### Examples
+### HTTP Header Security Checker
 
-#### Check all security headers for a website:
+The HTTP Header Security Checker analyzes HTTP security headers to ensure proper security controls:
+
 ```bash
-python hhhchecker.py https://example.com
+# Basic usage
+hhchecker header-check https://example.com
+
+# With cookies
+hhchecker header-check https://example.com --cookies "session=abcd1234; token=xyz789"
+
+# Check specific headers only
+hhchecker header-check https://example.com --header "Content-Security-Policy" --header "X-Frame-Options"
+
+# Use a predefined check profile
+hhchecker header-check https://example.com --profile simple
 ```
 
-#### Check only specific headers:
-```bash
-python hhhchecker.py https://example.com -H "Content-Security-Policy" -H "X-Frame-Options"
+For Python usage:
+
+```python
+from hhchecker.header_checker import check_headers
+
+# Check headers
+check_headers(
+    url="https://example.com",
+    cookies="session=abcd1234; token=xyz789",
+    verify_ssl=True,
+    timeout=10,
+    specific_headers=["Content-Security-Policy", "X-Frame-Options"]
+)
 ```
 
-#### Use a predefined profile:
-```bash
-python hhhchecker.py https://example.com -p simple
-```
+## Security Considerations
 
-#### Check with cookies:
-```bash
-python hhhchecker.py https://example.com -c "session=abc123; user=john"
-```
-
-#### Test CORS implementation:
-```bash
-python hhhchecker.py https://api.example.com -o "https://trusted-site.com"
-```
-
-## Security Headers Checked
-
-| Header | Description | Recommendation |
-|--------|-------------|----------------|
-| Strict-Transport-Security | Enforces HTTPS connections | `max-age=31536000; includeSubDomains; preload` |
-| Content-Security-Policy | Controls resources the browser is allowed to load | Site-specific policy to prevent XSS |
-| X-Frame-Options | Prevents clickjacking attacks | `DENY` or `SAMEORIGIN` |
-| X-Content-Type-Options | Prevents MIME-sniffing | `nosniff` |
-| Referrer-Policy | Controls referrer information | `no-referrer` or `strict-origin-when-cross-origin` |
-| Permissions-Policy | Restricts browser features | Site-specific policy |
-| Cache-Control | Controls browser caching | `no-store` or appropriate caching policy |
-| Set-Cookie | Cookie attributes | `Secure; HttpOnly; SameSite=Strict` |
-| Access-Control-Allow-Origin | CORS implementation | Specific trusted domain, not `*` |
-
-## Additional Checks
-
-The tool also performs these additional security checks:
-
-- Deprecated security headers (X-XSS-Protection, Public-Key-Pins)
-- Information leakage via Server and X-Powered-By headers
-- Framework version disclosure (X-AspNet-Version, etc.)
-- HSTS preload eligibility
-- CSP implementation quality (unsafe-inline, unsafe-eval usage)
-- Cross-Origin Resource isolation headers
-- Security.txt file availability
-
-## Predefined Check Profiles
-
-- `simple`: Critical headers only (HSTS, CSP, X-Frame-Options, X-Content-Type-Options, Cache-Control, CORS)
-- `cookies`: Cookie-related headers only
-- `cors`: CORS-related headers only
-- `all`: All headers with additional security checks
-- `all_without_additional`: All headers without additional security checks
-
-## Output Example
-
-```
-Checking security headers for: https://example.com
-Timeout: 10 seconds
-
-Response Status Code: 200
-
-Received Headers:
-Server: nginx
-Date: Wed, 19 Apr 2023 12:34:56 GMT
-Content-Type: text/html; charset=UTF-8
-Content-Length: 12345
-Connection: keep-alive
-Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
-Content-Security-Policy: default-src 'self'; script-src 'self'; object-src 'none'
-X-Frame-Options: DENY
-X-Content-Type-Options: nosniff
-Referrer-Policy: no-referrer
-Permissions-Policy: geolocation=(), microphone=(), camera=()
-Cache-Control: no-store, must-revalidate
-Set-Cookie: session=[MASKED]; HttpOnly; Secure; SameSite=Lax
-
-Security Check Results:
-[+] Strict-Transport-Security is properly configured.
-[+] Content-Security-Policy is properly configured.
-[+] X-Frame-Options is properly configured.
-[+] X-Content-Type-Options is properly configured.
-[+] Referrer-Policy is properly configured.
-[+] Permissions-Policy is properly configured.
-[+] Cache-Control is properly configured.
-[+] Set-Cookie is properly configured.
-[!] Access-Control-Allow-Origin - Missing or misconfigured. Should be set to a specific trusted domain or 'none' to prevent unauthorized cross-origin access.
-
-Additional Security Checks:
-[+] security.txt file found. Good practice for security researchers to contact you.
-```
-
-## Use Cases
-
-- 🔒 Security audits and penetration testing
-- 🛡️ DevSecOps pipeline integration
-- 🔍 Continuous security monitoring
-- 📋 Compliance verification
-- 🎓 Security education and awareness
+- **Responsible Use**: This tool is designed for security professionals, penetration testers, and system administrators to assess the security of their own systems or systems they have permission to test.
+- **Legal Compliance**: Always ensure you have proper authorization before testing any system. Unauthorized security testing may be illegal.
+- **Rate Limiting**: The tool implements delays between requests to avoid triggering rate limiting or denial of service protections.
 
 ## Contributing
 
@@ -187,6 +125,5 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Acknowledgments
 
-- OWASP Secure Headers Project
-- Mozilla Observatory
-- SecurityHeaders.com
+- Thanks to all the security researchers who have contributed to web security best practices
+- Special thanks to the cybersecurity community for continuously improving web security standards

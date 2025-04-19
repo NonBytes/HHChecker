@@ -3,7 +3,7 @@
 HTTP Header Security Checker
 ----------------------------
 This script checks the security headers of a given URL and allows the user to input 
-cookies and verify a custom CORS setting.
+cookies.
 
 Improved with:
 - Better input validation
@@ -38,9 +38,9 @@ DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.
 
 # Predefined check profiles
 CHECK_PROFILES = {
-    "simple": [1, 2, 3, 4, 7, 9],  # Simple check with critical headers
+    "simple": [1, 2, 3, 4, 7],  # Simple check with critical headers
     "cookies": [8],  # Cookie security specific check
-    "cors": [9],  # CORS specific check
+    "server_info": [],  # Server information specific check (runs additional checks only)
     "all": [],  # All headers (empty list means all)
     "all_without_additional": []  # All headers but skip additional checks
 }
@@ -53,8 +53,7 @@ SECURITY_HEADERS = {
     "Referrer-Policy": "Missing. Should be 'no-referrer' or 'strict-origin-when-cross-origin' to limit referrer information.",
     "Permissions-Policy": "Missing. Should restrict browser features like camera, microphone, and geolocation.",
     "Cache-Control": "Missing. Should be 'no-store' or 'max-age=0, no-cache, must-revalidate' to control caching.",
-    "Set-Cookie": "Secure flag missing in cookies. Should have 'Secure; HttpOnly; SameSite=Strict' or 'Lax'.",
-    "Access-Control-Allow-Origin": "Missing or misconfigured. Should be set to a specific trusted domain or 'none' to prevent unauthorized cross-origin access."
+    "Set-Cookie": "Secure flag missing in cookies. Should have 'Secure; HttpOnly; SameSite=Strict' or 'Lax'."
 }
 
 
@@ -126,34 +125,7 @@ def parse_cookie_string(cookie_str: str) -> Dict[str, str]:
         return {}
 
 
-def validate_cors_origin(origin: str) -> Tuple[bool, str]:
-    """
-    Validate CORS origin format.
-    
-    Args:
-        origin: CORS origin string
-        
-    Returns:
-        Tuple of (is_valid, error_message or origin)
-    """
-    if not origin:
-        return True, ""
-    
-    # Add https:// prefix if missing
-    if not origin.startswith(("http://", "https://")):
-        origin = "https://" + origin
-    
-    try:
-        parsed = urllib.parse.urlparse(origin)
-        if not all([parsed.scheme, parsed.netloc]):
-            return False, "Invalid CORS origin format. Must contain a scheme (http/https) and hostname."
-            
-        return True, origin
-    except Exception as e:
-        return False, f"CORS origin parsing error: {str(e)}"
-
-
-def check_headers(url: str, cookies: Optional[str] = None, custom_cors: Optional[str] = None, 
+def check_headers(url: str, cookies: Optional[str] = None, 
                   verify_ssl: bool = True, timeout: int = DEFAULT_TIMEOUT, 
                   specific_headers: Optional[list] = None, skip_additional: bool = False) -> None:
     """
@@ -162,9 +134,10 @@ def check_headers(url: str, cookies: Optional[str] = None, custom_cors: Optional
     Args:
         url: Target URL to check
         cookies: Optional cookie string 
-        custom_cors: Optional expected CORS value
         verify_ssl: Whether to verify SSL certificates
         timeout: Request timeout in seconds
+        specific_headers: Optional list of specific headers to check
+        skip_additional: Whether to skip additional security checks
     """
     # Validate URL
     url_valid, url_result = validate_url(url)
@@ -172,14 +145,6 @@ def check_headers(url: str, cookies: Optional[str] = None, custom_cors: Optional
         print(Fore.RED + f"Error: {url_result}" + Style.RESET_ALL)
         return
     url = url_result
-    
-    # Validate CORS origin if provided
-    if custom_cors:
-        cors_valid, cors_result = validate_cors_origin(custom_cors)
-        if not cors_valid:
-            print(Fore.RED + f"Error: {cors_result}" + Style.RESET_ALL)
-            return
-        custom_cors = cors_result
     
     # Prepare headers
     headers = {
@@ -193,10 +158,6 @@ def check_headers(url: str, cookies: Optional[str] = None, custom_cors: Optional
             # We don't want to modify the original cookie string provided by user
             # Instead we'll use it as-is for the "Cookie" header
             headers["Cookie"] = cookies
-    
-    # Add Origin header for CORS testing if provided
-    if custom_cors:
-        headers["Origin"] = custom_cors
     
     # Disable SSL warnings if verification is disabled
     if not verify_ssl:
@@ -232,6 +193,12 @@ def check_headers(url: str, cookies: Optional[str] = None, custom_cors: Optional
             # Determine if this is a security header that should be highlighted
             is_security_header = key.lower() in security_header_names
             
+            # Determine if this is a server footprint header
+            is_server_footprint = key.lower() in ["server", "x-powered-by", "x-aspnet-version", "x-aspnetmvc-version", 
+                                                "x-generator", "x-drupal-cache", "x-varnish", "x-shopify-stage",
+                                                "x-litespeed-cache", "x-magento-cache-debug", "x-aem-info", 
+                                                "x-joomla-cache", "x-wp-total", "x-wp-totalpages"]
+            
             # Check if the header value appears to be properly configured
             is_properly_configured = False
             
@@ -253,8 +220,6 @@ def check_headers(url: str, cookies: Optional[str] = None, custom_cors: Optional
                     is_properly_configured = True
                 elif key.lower() == "set-cookie" and all(x in value for x in ["Secure", "HttpOnly"]):
                     is_properly_configured = True
-                elif key.lower() == "access-control-allow-origin" and value != "*":
-                    is_properly_configured = True
             
             # Mask sensitive data in cookies
             if key.lower() == "set-cookie":
@@ -263,11 +228,17 @@ def check_headers(url: str, cookies: Optional[str] = None, custom_cors: Optional
                 if is_properly_configured:
                     print(Fore.GREEN + f"{key}: {masked_value}" + Style.RESET_ALL)
                 else:
-                    print(f"{key}: {masked_value}")
+                    print(Fore.RED + f"{key}: {masked_value}" + Style.RESET_ALL)
             else:
-                # Print with green highlight if it's a properly configured security header
-                if is_security_header and is_properly_configured:
-                    print(Fore.GREEN + f"{key}: {value}" + Style.RESET_ALL)
+                # Print with appropriate highlighting based on header type and status
+                if is_server_footprint:
+                    # Highlight server footprint headers in yellow
+                    print(Fore.YELLOW + f"{key}: {value}" + Style.RESET_ALL)
+                elif is_security_header:
+                    if is_properly_configured:
+                        print(Fore.GREEN + f"{key}: {value}" + Style.RESET_ALL)
+                    else:
+                        print(Fore.RED + f"{key}: {value}" + Style.RESET_ALL)
                 else:
                     print(f"{key}: {value}")
         
@@ -312,14 +283,6 @@ def check_headers(url: str, cookies: Optional[str] = None, custom_cors: Optional
                 else:
                     print(Fore.GREEN + f"[+] {header} is properly configured." + Style.RESET_ALL)
             
-            elif header == "Access-Control-Allow-Origin":
-                if custom_cors and header_value != custom_cors:
-                    print(Fore.RED + f"[!] {header} - Expected '{custom_cors}' but received '{header_value}'. {recommendation}" + Style.RESET_ALL)
-                elif header_value == "*":
-                    print(Fore.RED + f"[!] {header} - Wildcard '*' is insecure. {recommendation}" + Style.RESET_ALL)
-                else:
-                    print(Fore.GREEN + f"[+] {header} is properly configured." + Style.RESET_ALL)
-            
             elif header == "Content-Security-Policy":
                 # Check if it's only report-only mode
                 if not header_exists and "content-security-policy-report-only" in [h.lower() for h in response_headers.keys()]:
@@ -357,6 +320,57 @@ def check_headers(url: str, cookies: Optional[str] = None, custom_cors: Optional
                     powered_by = response_headers["X-Powered-By"]
                     print(Fore.YELLOW + f"[!] X-Powered-By header reveals information: '{powered_by}'. Consider removing." + Style.RESET_ALL)
                     
+                    # Check for specific technology footprints
+                    if powered_by.startswith("PHP/"):
+                        php_version = powered_by.split("/")[1]
+                        print(Fore.YELLOW + f"[!] PHP version {php_version} detected. This may expose version-specific vulnerabilities." + Style.RESET_ALL)
+                    elif "ASP.NET" in powered_by:
+                        print(Fore.YELLOW + f"[!] ASP.NET framework detected. Consider removing version information." + Style.RESET_ALL)
+                    elif any(tech in powered_by for tech in ["Express", "Laravel", "Django", "Ruby", "Rails"]):
+                        print(Fore.YELLOW + f"[!] Framework information detected in X-Powered-By. Consider removing." + Style.RESET_ALL)
+            
+            # Check for Server header technology footprints
+            if "Server" in response_headers:
+                server = response_headers["Server"]
+                server_techs = []
+                
+                # Check for common web servers and technologies
+                if "Apache" in server:
+                    server_techs.append("Apache")
+                    # Try to extract Apache version
+                    apache_match = re.search(r'Apache/(\d+\.\d+\.\d+)', server)
+                    if apache_match:
+                        apache_version = apache_match.group(1)
+                        print(Fore.YELLOW + f"[!] Apache version {apache_version} detected. Consider hiding version information." + Style.RESET_ALL)
+                
+                if "nginx" in server:
+                    server_techs.append("nginx")
+                    # Try to extract nginx version
+                    nginx_match = re.search(r'nginx/(\d+\.\d+\.\d+)', server)
+                    if nginx_match:
+                        nginx_version = nginx_match.group(1)
+                        print(Fore.YELLOW + f"[!] nginx version {nginx_version} detected. Consider hiding version information." + Style.RESET_ALL)
+                
+                if "Microsoft-IIS" in server:
+                    server_techs.append("IIS")
+                    # Try to extract IIS version
+                    iis_match = re.search(r'Microsoft-IIS/(\d+\.\d+)', server)
+                    if iis_match:
+                        iis_version = iis_match.group(1)
+                        print(Fore.YELLOW + f"[!] Microsoft IIS version {iis_version} detected. Consider hiding version information." + Style.RESET_ALL)
+                
+                if "LiteSpeed" in server:
+                    server_techs.append("LiteSpeed")
+                
+                if "Tomcat" in server or "GlassFish" in server or "WebLogic" in server:
+                    java_tech = next((tech for tech in ["Tomcat", "GlassFish", "WebLogic"] if tech in server), "Java-based")
+                    server_techs.append(java_tech)
+                    print(Fore.YELLOW + f"[!] {java_tech} server detected. Consider removing detailed version information." + Style.RESET_ALL)
+                
+                # Summary of detected technologies
+                if server_techs:
+                    print(Fore.YELLOW + f"[!] Server technologies detected: {', '.join(server_techs)}. Consider generic server tokens." + Style.RESET_ALL)
+            
             # Check for ASP.NET version information leakage
             if "X-AspNet-Version" in response_headers:
                 aspnet_version = response_headers["X-AspNet-Version"]
@@ -431,6 +445,64 @@ def check_headers(url: str, cookies: Optional[str] = None, custom_cors: Optional
                 if "report-uri" not in csp and "report-to" not in csp:
                     print(Fore.YELLOW + "[!] Content-Security-Policy should include 'report-uri' or 'report-to' for violation reporting." + Style.RESET_ALL)
             
+            # Check for technology fingerprints in other headers
+            tech_headers = {
+                "X-Generator": "CMS/framework generator",
+                "X-Drupal-Cache": "Drupal CMS",
+                "X-Drupal-Dynamic-Cache": "Drupal CMS",
+                "X-Varnish": "Varnish cache server",
+                "X-Shopify-Stage": "Shopify ecommerce",
+                "X-WP-Total": "WordPress",
+                "X-WP-TotalPages": "WordPress",
+                "X-Litespeed-Cache": "LiteSpeed server/cache",
+                "X-Magento-Cache-Debug": "Magento ecommerce",
+                "X-AEM-Info": "Adobe Experience Manager",
+                "X-Joomla-Cache": "Joomla CMS"
+            }
+            
+            detected_techs = []
+            for tech_header, tech_name in tech_headers.items():
+                if tech_header in response_headers:
+                    detected_techs.append(tech_name)
+                    print(Fore.YELLOW + f"[!] {tech_header} header detected, revealing {tech_name}. Consider removing." + Style.RESET_ALL)
+            
+            # Check for specific response headers that might indicate frameworks
+            if "vary" in [h.lower() for h in response_headers.keys()]:
+                vary_header = response_headers.get("Vary")
+                if "X-PJAX" in vary_header:
+                    detected_techs.append("PJAX/jQuery framework")
+                    print(Fore.YELLOW + f"[!] PJAX/jQuery framework detected via Vary header. Consider generic configuration." + Style.RESET_ALL)
+            
+            # Header pattern-based detection
+            laravel_headers = ["X-XSRF-TOKEN", "laravel_session"]
+            if any(h.lower() in [header.lower() for header in response_headers.keys()] for h in laravel_headers):
+                detected_techs.append("Laravel PHP framework")
+                print(Fore.YELLOW + f"[!] Laravel PHP framework detected via specific headers. Consider generic configuration." + Style.RESET_ALL)
+                
+            # Check for common cookie names that indicate specific technologies
+            if "Set-Cookie" in response_headers:
+                cookies_str = response_headers.get("Set-Cookie")
+                cookie_techs = {
+                    "PHPSESSID": "PHP",
+                    "JSESSIONID": "Java Servlet technology",
+                    "ASP.NET_SessionId": "ASP.NET",
+                    "_cfuid": "Cloudflare",
+                    "wp-": "WordPress",
+                    "laravel_session": "Laravel",
+                    "XSRF-TOKEN": "Modern JS framework (Angular/Laravel/etc)",
+                    "django": "Django Python framework"
+                }
+                
+                for cookie_name, tech in cookie_techs.items():
+                    if cookie_name in cookies_str:
+                        detected_techs.append(f"{tech} (via cookie)")
+                        print(Fore.YELLOW + f"[!] {tech} detected via {cookie_name} cookie. Consider renaming default cookies." + Style.RESET_ALL)
+            
+            # Summary of all technology fingerprints
+            if detected_techs:
+                print(Fore.YELLOW + f"[!] Technology fingerprints detected: {', '.join(set(detected_techs))}." + Style.RESET_ALL)
+                print(Fore.YELLOW + "[!] Consider removing or obscuring technology-specific signatures to improve security." + Style.RESET_ALL)
+            
             # Check if security.txt is available
             if url.startswith(("http://", "https://")):
                 try:
@@ -488,9 +560,6 @@ def main():
     parser.add_argument("-c", "--cookies", 
                         help="Cookies to include in the request (format: name1=value1; name2=value2)")
     
-    parser.add_argument("-o", "--origin", 
-                        help="Expected CORS origin value for testing")
-    
     parser.add_argument("-t", "--timeout", type=int, default=DEFAULT_TIMEOUT,
                         help=f"Request timeout in seconds (default: {DEFAULT_TIMEOUT})")
     
@@ -504,7 +573,7 @@ def main():
                         help="List all available security headers that can be checked")
     
     parser.add_argument("-p", "--profile", choices=list(CHECK_PROFILES.keys()),
-                        help="Use a predefined check profile (simple: critical headers only, cookies: cookie-related only, cors: CORS-related only, all: all headers, all_without_additional: all headers without additional checks)")
+                        help="Use a predefined check profile (simple: critical headers only, cookies: cookie-related only, server_info: server technology fingerprinting, all: all headers, all_without_additional: all headers without additional checks)")
     
     parser.add_argument("--skip-additional", action="store_true",
                         help="Skip additional security checks beyond the main headers")
@@ -517,16 +586,15 @@ def main():
         for idx, header in enumerate(SECURITY_HEADERS.keys(), 1):
             print(f"{idx}. {header}")
         print("\nAvailable check profiles:")
-        print("  simple: Critical headers only (1,2,3,4,7,9)")
+        print("  simple: Critical headers only (1,2,3,4,7)")
         print("  cookies: Cookie-related headers only")
-        print("  cors: CORS-related headers only")
+        print("  server_info: Server technology and fingerprinting checks")
         print("  all: All headers with additional security checks")
         print("  all_without_additional: All headers without additional security checks")
         sys.exit(0)
     
     url = args.url
     cookies = args.cookies
-    custom_cors = args.origin
     verify_ssl = not args.no_verify
     timeout = args.timeout
     specific_headers = args.headers
@@ -555,11 +623,6 @@ def main():
     if cookies is None:  # Check for None because empty string is valid
         cookies = input("Enter cookies (if any, else press Enter to skip): ").strip()
         cookies = cookies if cookies else None
-    
-    # If CORS origin not provided as argument, prompt for it
-    if custom_cors is None:  # Check for None because empty string is valid
-        custom_cors = input("Enter expected CORS value (if any, else press Enter to skip): ").strip()
-        custom_cors = custom_cors if custom_cors else None
     
     # If specific headers not provided, ask if user wants to check specific headers
     if specific_headers is None and not profile:
@@ -608,7 +671,7 @@ def main():
                 skip_additional = True
     
     # Run the security check
-    check_headers(url, cookies, custom_cors, verify_ssl, timeout, specific_headers, skip_additional)
+    check_headers(url, cookies, verify_ssl, timeout, specific_headers, skip_additional)
 
 
 if __name__ == "__main__":
